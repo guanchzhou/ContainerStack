@@ -10,6 +10,7 @@ struct ImagesView: View {
     @State private var selectedImageID: String?
     @State private var imageSort = [KeyPathComparator(\DockerImageSummary.referenceText)]
     @State private var pendingImageDelete: DockerImageSummary?
+    @AppStorage(ResourceViewMode.storageKey) private var viewMode = ResourceViewMode.cards.rawValue
     @Environment(\.appTheme) private var theme
 
     var body: some View {
@@ -39,6 +40,24 @@ struct ImagesView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ResourceSplitPane {
+                    // Group so the context menu applies to whichever presentation is active.
+                    Group {
+                    if viewMode == ResourceViewMode.cards.rawValue {
+                        List(selection: $selectedImageID) {
+                            ForEach(filteredImages) { image in
+                                ImageCardRow(
+                                    image: image,
+                                    model: model,
+                                    onDelete: {
+                                        selectedImageID = image.id
+                                        pendingImageDelete = image
+                                    }
+                                )
+                                .tag(image.id)
+                            }
+                        }
+                        .listStyle(.inset)
+                    } else {
                     Table(filteredImages, selection: $selectedImageID, sortOrder: $imageSort) {
                         TableColumn("Repository", value: \.referenceText) { image in
                             Text(image.referenceText)
@@ -63,6 +82,8 @@ struct ImagesView: View {
                         .width(min: 90, ideal: 150)
                     }
                     .tableStyle(.inset(alternatesRowBackgrounds: false))
+                    }
+                    }
                     .contextMenu(forSelectionType: String.self) { selected in
                         if let id = selected.first,
                            let image = model.images.first(where: { $0.id == id }) {
@@ -204,5 +225,45 @@ private struct ImageUsageCell: View {
         Text(used.isEmpty ? "—" : used.map(\.name).joined(separator: ", "))
             .foregroundStyle(.secondary)
             .truncationMode(.middle)
+    }
+}
+
+
+/// Extracted so the type checker can cope: a ResourceCard with inline ternaries and two
+/// buttons in the same expression exceeded its budget.
+private struct ImageCardRow: View {
+    let image: DockerImageSummary
+    let model: RuntimeViewModel
+    let onDelete: () -> Void
+
+    private var subtitle: String? {
+        let created = image.createdText
+        return created == "—" ? nil : "Created \(created)"
+    }
+
+    private var sizeText: String {
+        image.size == nil ? "—" : ByteSize.formatted(image.size)
+    }
+
+    var body: some View {
+        ResourceCard(title: image.referenceText, subtitle: subtitle, trailing: sizeText) {
+            Button {
+                Task { await model.run(image: image.repositoryTags?.first ?? image.id) }
+            } label: {
+                Image(systemName: "play")
+            }
+            .buttonStyle(.borderless)
+            .help("Run image")
+            .accessibilityLabel("Run \(image.referenceText)")
+
+            Button(action: onDelete) {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(.red)
+            .help("Delete image")
+            .accessibilityLabel("Delete \(image.referenceText)")
+        }
+        .disabled(model.busyResource != nil || !model.isHealthy)
     }
 }

@@ -8,6 +8,7 @@ struct ContainersView: View {
     @State private var inspectorTab = ContainerInspector.Tab.stats
     @State private var sort = [KeyPathComparator(\DockerContainerSummary.name)]
     @State private var pendingDelete: DockerContainerSummary?
+    @AppStorage(ResourceViewMode.storageKey) private var viewMode = ResourceViewMode.cards.rawValue
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -26,6 +27,33 @@ struct ContainersView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ResourceSplitPane {
+                    Group {
+                    if viewMode == ResourceViewMode.cards.rawValue {
+                        // Sections restore the Compose grouping the table could only express
+                        // as a sortable column.
+                        List(selection: containerSelection) {
+                            ForEach(filteredGroups) { group in
+                                Section(group.project ?? "Not in a stack") {
+                                    ForEach(group.containers) { container in
+                                        ContainerCardRow(
+                                            container: container,
+                                            model: model,
+                                            onShowLogs: {
+                                                model.selectedContainerID = container.id
+                                                inspectorTab = .logs
+                                            },
+                                            onDelete: {
+                                                model.selectedContainerID = container.id
+                                                pendingDelete = container
+                                            }
+                                        )
+                                        .tag(container.id)
+                                    }
+                                }
+                            }
+                        }
+                        .listStyle(.inset)
+                    } else {
                     Table(flatContainers, selection: containerSelection, sortOrder: $sort) {
                         TableColumn("Name", value: \.name) { container in
                             HStack(spacing: 6) {
@@ -63,6 +91,8 @@ struct ContainersView: View {
                         .width(min: 110, ideal: 170)
                     }
                     .tableStyle(.inset(alternatesRowBackgrounds: false))
+                    }
+                    }
                     .contextMenu(forSelectionType: String.self) { selected in
                         if let id = selected.first,
                            let container = model.containers.first(where: { $0.id == id }) {
@@ -145,3 +175,54 @@ struct ContainersView: View {
 
 }
 
+
+
+/// The container card: state at a glance, the two actions people reach for most, and delete
+/// separated from them. Extracted to keep the type checker inside its budget.
+private struct ContainerCardRow: View {
+    let container: DockerContainerSummary
+    let model: RuntimeViewModel
+    let onShowLogs: () -> Void
+    let onDelete: () -> Void
+
+    private var subtitle: String {
+        let image = container.imageText
+        guard let ports = container.portSummary else { return image }
+        return "\(image) · \(ports)"
+    }
+
+    var body: some View {
+        ResourceCard(
+            title: container.name,
+            subtitle: subtitle,
+            trailing: container.stateText,
+            indicator: container.isRunning ? .green : .secondary,
+            indicatorHelp: container.isRunning ? "Running" : "Not running"
+        ) {
+            Button {
+                Task { await model.toggle(container: container) }
+            } label: {
+                Image(systemName: container.isRunning ? "stop.fill" : "play.fill")
+            }
+            .buttonStyle(.borderless)
+            .help(container.isRunning ? "Stop" : "Start")
+            .accessibilityLabel(container.isRunning ? "Stop \(container.name)" : "Start \(container.name)")
+
+            Button(action: onShowLogs) {
+                Image(systemName: "text.alignleft")
+            }
+            .buttonStyle(.borderless)
+            .help("Logs")
+            .accessibilityLabel("Logs for \(container.name)")
+
+            Button(action: onDelete) {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(.red)
+            .help("Delete")
+            .accessibilityLabel("Delete \(container.name)")
+        }
+        .disabled(model.busyContainerID != nil || !model.isHealthy)
+    }
+}

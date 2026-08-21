@@ -7,6 +7,7 @@ struct VolumesView: View {
     @State private var isConfirmingPrune = false
     @State private var selectedVolumeName: String?
     @State private var volumeSort = [KeyPathComparator(\DockerVolumeSummary.name)]
+    @AppStorage(ResourceViewMode.storageKey) private var viewMode = ResourceViewMode.cards.rawValue
     @State private var pendingVolumeDelete: DockerVolumeSummary?
     @Environment(\.appTheme) private var theme
 
@@ -36,6 +37,40 @@ struct VolumesView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ResourceSplitPane {
+                    if viewMode == ResourceViewMode.cards.rawValue {
+                        List(selection: $selectedVolumeName) {
+                            ForEach(filteredVolumes) { volume in
+                                ResourceCard(
+                                    title: volume.name,
+                                    subtitle: volume.mountText,
+                                    trailing: volume.driverText
+                                ) {
+                                    Button {
+                                        selectedVolumeName = volume.name
+                                        pendingVolumeDelete = volume
+                                    } label: {
+                                        Image(systemName: "trash")
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .foregroundStyle(.red)
+                                    .help("Delete volume")
+                                    .accessibilityLabel("Delete volume \(volume.name)")
+                                    .disabled(model.busyResource != nil || !model.isHealthy)
+                                }
+                                .tag(volume.name)
+                            }
+                        }
+                        .listStyle(.inset)
+                        .contextMenu(forSelectionType: String.self) { selected in
+                            if let name = selected.first,
+                               let volume = model.volumes.first(where: { $0.name == name }) {
+                                Button("Delete Volume…", role: .destructive) {
+                                    selectedVolumeName = name
+                                    pendingVolumeDelete = volume
+                                }
+                            }
+                        }
+                    } else {
                     Table(filteredVolumes, selection: $selectedVolumeName, sortOrder: $volumeSort) {
                         TableColumn("Name", value: \.name) { volume in
                             Text(volume.name).fontWeight(.medium)
@@ -63,6 +98,7 @@ struct VolumesView: View {
                                 pendingVolumeDelete = volume
                             }
                         }
+                    }
                     }
                 } inspector: {
                     VolumeInspector(volume: selectedVolume, model: model)
@@ -131,6 +167,7 @@ struct NetworksView: View {
     var searchText: String = ""
     @State private var selectedNetworkID: String?
     @State private var networkSort = [KeyPathComparator(\DockerNetworkSummary.name)]
+    @AppStorage(ResourceViewMode.storageKey) private var viewMode = ResourceViewMode.cards.rawValue
     @State private var pendingNetworkDelete: DockerNetworkSummary?
     @Environment(\.appTheme) private var theme
 
@@ -160,6 +197,42 @@ struct NetworksView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ResourceSplitPane {
+                    if viewMode == ResourceViewMode.cards.rawValue {
+                        List(selection: $selectedNetworkID) {
+                            ForEach(filteredNetworks) { network in
+                                ResourceCard(
+                                    title: network.name,
+                                    subtitle: network.subnetText == "—"
+                                        ? network.driverText
+                                        : "\(network.subnetText) · gateway \(network.gatewayText)",
+                                    trailing: network.driverText
+                                ) {
+                                    Button {
+                                        selectedNetworkID = network.id
+                                        pendingNetworkDelete = network
+                                    } label: {
+                                        Image(systemName: "trash")
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .foregroundStyle(.red)
+                                    .help("Delete network")
+                                    .accessibilityLabel("Delete network \(network.name)")
+                                    .disabled(model.busyResource != nil || !model.isHealthy)
+                                }
+                                .tag(network.id)
+                            }
+                        }
+                        .listStyle(.inset)
+                        .contextMenu(forSelectionType: String.self) { selected in
+                            if let id = selected.first,
+                               let network = model.networks.first(where: { $0.id == id }) {
+                                Button("Delete Network…", role: .destructive) {
+                                    selectedNetworkID = id
+                                    pendingNetworkDelete = network
+                                }
+                            }
+                        }
+                    } else {
                     Table(filteredNetworks, selection: $selectedNetworkID, sortOrder: $networkSort) {
                         TableColumn("Name", value: \.name) { network in
                             Text(network.name).fontWeight(.medium)
@@ -187,6 +260,7 @@ struct NetworksView: View {
                                 pendingNetworkDelete = network
                             }
                         }
+                    }
                     }
                 } inspector: {
                     NetworkInspector(network: selectedNetwork, model: model)

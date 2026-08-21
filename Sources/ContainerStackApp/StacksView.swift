@@ -12,6 +12,7 @@ struct StacksView: View {
     @State private var newStackDirectory: URL?
     @State private var selectedStackID: UUID?
     @State private var stackSort = [KeyPathComparator(\ComposeStack.name)]
+    @AppStorage(ResourceViewMode.storageKey) private var viewMode = ResourceViewMode.cards.rawValue
     @State private var openedStackID: UUID?
     @Environment(\.appTheme) private var theme
 
@@ -32,6 +33,18 @@ struct StacksView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ResourceSplitPane {
+                    Group {
+                    if viewMode == ResourceViewMode.cards.rawValue {
+                        List(selection: $selectedStackID) {
+                            ForEach(filteredStacks) { stack in
+                                ResourceCard(title: stack.name, subtitle: stack.filePathText) {
+                                    EmptyView()
+                                }
+                                .tag(stack.id)
+                            }
+                        }
+                        .listStyle(.inset)
+                    } else {
                     Table(filteredStacks, selection: $selectedStackID, sortOrder: $stackSort) {
                         TableColumn("Stack", value: \.name) { stack in
                             Text(stack.name).fontWeight(.medium)
@@ -46,6 +59,8 @@ struct StacksView: View {
                         .width(min: 200, ideal: 380)
                     }
                     .tableStyle(.inset(alternatesRowBackgrounds: false))
+                    }
+                    }
                     .contextMenu(forSelectionType: UUID.self) { selected in
                         if let id = selected.first,
                            let stack = model.allStacks.first(where: { $0.id == id }) {

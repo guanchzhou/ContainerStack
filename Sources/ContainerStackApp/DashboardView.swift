@@ -33,6 +33,7 @@ struct DashboardView: View {
     @State private var searchText = ""
     @State private var focusImagePull = false
     @AppStorage(InspectorPlacement.storageKey) private var inspectorPlacement = InspectorPlacement.trailing.rawValue
+    @AppStorage(ResourceViewMode.storageKey) private var resourceViewMode = ResourceViewMode.cards.rawValue
 
     var body: some View {
         NavigationSplitView {
@@ -76,6 +77,23 @@ struct DashboardView: View {
                             focusImagePull = true
                         }
                         .disabled(!model.isHealthy)
+                    }
+                    if selection != .overview {
+                        ToolbarItem {
+                            // Cards or table is the user's call, not ours. The Activity
+                            // Monitor is excluded: comparing numbers across rows IS a table.
+                            Picker("View", selection: $resourceViewMode) {
+                                ForEach(ResourceViewMode.allCases) { mode in
+                                    Image(systemName: mode.symbol)
+                                        .help(mode.title)
+                                        .accessibilityLabel(mode.title)
+                                        .tag(mode.rawValue)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .labelsHidden()
+                            .help("Switch between cards and a table")
+                        }
                     }
                     // Inspector placement: logs and configuration need width, so the
                     // bottom position exists for them. Omitted rather than hidden on the
@@ -146,13 +164,13 @@ struct DashboardView: View {
             let running = model.containers.filter(\.isRunning).count
             return "\(running) of \(model.containers.count) running"
         case .stacks:
-            return "\(model.allStacks.count) stacks"
+            return "^[\(model.allStacks.count) stack](inflect: true)"
         case .images:
-            return "\(model.images.count) images"
+            return "^[\(model.images.count) image](inflect: true)"
         case .volumes:
-            return "\(model.volumes.count) volumes"
+            return "^[\(model.volumes.count) volume](inflect: true)"
         case .networks:
-            return "\(model.networks.count) networks"
+            return "^[\(model.networks.count) network](inflect: true)"
         case .overview:
             return model.statusTitle
         }

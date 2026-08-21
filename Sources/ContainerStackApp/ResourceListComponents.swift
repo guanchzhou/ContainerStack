@@ -46,8 +46,10 @@ struct ResourceSplitPane<ListContent: View, Inspector: View>: View {
             }
         case .bottom:
             VSplitView {
-                list().frame(minHeight: 140)
-                inspector().frame(minHeight: 200, idealHeight: 340)
+                // The list yields space here: it scrolls, the inspector clips. Before this
+                // the inspector got ~180pt and its content ran under the window edge.
+                list().frame(minHeight: 120, idealHeight: 220)
+                inspector().frame(minHeight: 300)
             }
         }
     }
@@ -114,7 +116,13 @@ struct InspectorStatBlock: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 0) {
+            // Adapts to the pane's shape rather than assuming a narrow column: at the
+            // bottom placement there is width for several facts per line, and a single tall
+            // column there would need scrolling for content that fits.
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 260), spacing: 0)],
+                spacing: 0
+            ) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                     HStack(alignment: .firstTextBaseline, spacing: 12) {
                         Text(row.key)
