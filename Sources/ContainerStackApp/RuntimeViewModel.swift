@@ -47,6 +47,13 @@ final class RuntimeViewModel {
     private(set) var errorMessage: String?
     internal(set) var imagesErrorMessage: String?
     internal(set) var containersErrorMessage: String?
+    /// Activity Monitor state. Rows are derived from live samples; allocations are cached
+    /// because a container's CPU/memory grant cannot change while it runs.
+    internal(set) var resourceRows: [ContainerResourceRow] = []
+    var allocations: [String: ContainerAllocation?] = [:]
+    var statsTask: Task<Void, Never>?
+    /// Set when /system/df fails, so the UI can say "engine error" instead of showing a dash.
+    internal(set) var diskUsageErrorMessage: String?
     internal(set) var serviceMessage: String? {
         didSet {
             serviceMessageExpiresAt =
@@ -456,7 +463,7 @@ final class RuntimeViewModel {
         return logURL
     }
 
-    private func userFacingError(_ error: Error) -> String {
+    func userFacingError(_ error: Error) -> String {
         guard let socketError = error as? UnixSocketError else {
             return String(describing: error)
         }

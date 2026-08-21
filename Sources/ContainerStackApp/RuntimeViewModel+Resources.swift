@@ -60,7 +60,16 @@ extension RuntimeViewModel {
     }
 
     func refreshDiskUsage() async {
-        diskUsage = try? await client.diskUsage()
+        do {
+            diskUsage = try await client.diskUsage()
+            diskUsageErrorMessage = nil
+        } catch {
+            // Swallowing this made a live 500 from the engine indistinguishable from
+            // "no data": /system/df currently answers {"message":"Something went wrong."}
+            // on Apple container 1.2.2, and the UI showed only an em dash.
+            diskUsage = nil
+            diskUsageErrorMessage = userFacingError(error)
+        }
     }
 
     func restart(container: DockerContainerSummary) async {

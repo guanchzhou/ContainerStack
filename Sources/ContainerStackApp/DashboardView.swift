@@ -13,7 +13,7 @@ enum DashboardDestination: String, CaseIterable, Hashable, Identifiable {
 
     var title: String {
         switch self {
-        case .overview: "Overview"
+        case .overview: "Activity Monitor"
         case .containers: "Containers"
         case .images: "Images"
         case .volumes: "Volumes"
@@ -26,7 +26,9 @@ enum DashboardDestination: String, CaseIterable, Hashable, Identifiable {
 
 struct DashboardView: View {
     let model: RuntimeViewModel
-    @State private var selection: DashboardDestination = .containers
+    // The Activity Monitor is the landing screen now that it shows live per-container
+    // resources; previously this defaulted past Overview because Overview said nothing.
+    @State private var selection: DashboardDestination = .overview
     @State private var isConfirmingPrune = false
     @State private var searchText = ""
     @State private var focusImagePull = false
@@ -44,7 +46,7 @@ struct DashboardView: View {
                 Group {
                     switch selection {
                     case .overview:
-                        OverviewView(model: model)
+                        ActivityMonitorView(model: model)
                     case .containers:
                         ContainersView(model: model, searchText: searchText)
                     case .images:
