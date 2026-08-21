@@ -11,6 +11,11 @@ struct ContainerStackApp: App {
             DashboardView(model: model)
         }
 
+        // Native Settings scene: gives Cmd-, and the standard window for free.
+        Settings {
+            SettingsView(model: model)
+        }
+
         MenuBarExtra {
             MenuBarView(model: model)
         } label: {

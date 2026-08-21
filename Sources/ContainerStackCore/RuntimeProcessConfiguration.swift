@@ -40,6 +40,104 @@ public struct RuntimeProcessConfiguration: Equatable, Sendable {
     ///
     /// A system install is still honoured when nothing is vendored, which keeps
     /// a development checkout working without a staged bundle.
+    /// The vendored runtime inside the app bundle, or nil outside a staged bundle.
+    ///
+    /// Works for both executables that need it: `Contents/MacOS/ContainerStack` and
+    /// `Contents/Helpers/ContainerStackRuntime` are both two levels below `Contents`.
+    public static func bundledInstallRoot(
+        forExecutableAt executable: URL?,
+        exists: (String) -> Bool = FileManager.default.isExecutableFile(atPath:)
+    ) -> String? {
+        guard let executable else { return nil }
+        let root = executable
+            .resolvingSymlinksInPath()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appending(path: "Resources/container")
+        return exists(root.appending(path: "bin/container").path) ? root.path : nil
+    }
+
+    /// Homebrew candidates only, pinned keg first.
+    public static let homebrewSearchPaths = [
+        "/opt/homebrew/opt/container@\(pinnedContainerVersion)/bin/container",
+        "/usr/local/opt/container@\(pinnedContainerVersion)/bin/container",
+        "/opt/homebrew/bin/container",
+        "/usr/local/bin/container"
+    ]
+
+    /// **The** owner of runtime resolution.
+    ///
+    /// Everything that needs a `RuntimeProcessConfiguration` goes through here, so the
+    /// binary and its install root are decided once. Deriving them separately is how they
+    /// drift apart: before this existed, the env override was read at one of four call
+    /// sites and the vendored install root was dropped at three of them, so a Restart from
+    /// the GUI could target a different copy than the helper had started.
+    public static func make(
+        socktainerPath: String,
+        socketPath: String = RuntimeProcessConfiguration.defaultSocketPath,
+        source: RuntimeSource = RuntimePreferences.load().runtimeSource,
+        bundledInstallRoot: String? = nil,
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        exists: (String) -> Bool = FileManager.default.isExecutableFile(atPath:)
+    ) -> RuntimeProcessConfiguration {
+        // The override stays absolute: it exists to rescue a machine whose install the
+        // search order cannot reach, so no source setting may veto it.
+        if let override = environment["CONTAINERSTACK_CONTAINER_PATH"], !override.isEmpty {
+            return RuntimeProcessConfiguration(
+                containerPath: override,
+                socktainerPath: socktainerPath,
+                socketPath: socketPath,
+                containerInstallRoot: nil
+            )
+        }
+
+        let vendored = bundledInstallRoot.map { "\($0)/bin/container" }
+
+        switch source {
+        case .bundled:
+            if let bundledInstallRoot, let vendored, exists(vendored) {
+                return RuntimeProcessConfiguration(
+                    containerPath: vendored,
+                    socktainerPath: socktainerPath,
+                    socketPath: socketPath,
+                    containerInstallRoot: bundledInstallRoot
+                )
+            }
+            // Asked for bundled and there is none — fall through rather than hand back a
+            // path that does not exist, and let the version gate report the real problem.
+            return RuntimeProcessConfiguration(
+                containerPath: containerSearchPaths.first(where: exists) ?? containerSearchPaths[0],
+                socktainerPath: socktainerPath,
+                socketPath: socketPath,
+                containerInstallRoot: nil
+            )
+
+        case .homebrew:
+            return RuntimeProcessConfiguration(
+                containerPath: homebrewSearchPaths.first(where: exists) ?? homebrewSearchPaths[0],
+                socktainerPath: socktainerPath,
+                socketPath: socketPath,
+                containerInstallRoot: nil
+            )
+
+        case .automatic:
+            if let bundledInstallRoot, let vendored, exists(vendored) {
+                return RuntimeProcessConfiguration(
+                    containerPath: vendored,
+                    socktainerPath: socktainerPath,
+                    socketPath: socketPath,
+                    containerInstallRoot: bundledInstallRoot
+                )
+            }
+            return RuntimeProcessConfiguration(
+                containerPath: containerSearchPaths.first(where: exists) ?? containerSearchPaths[0],
+                socktainerPath: socktainerPath,
+                socketPath: socketPath,
+                containerInstallRoot: nil
+            )
+        }
+    }
+
     public static func resolvedContainerPath(
         bundledInstallRoot: String? = nil,
         exists: (String) -> Bool = FileManager.default.isExecutableFile(atPath:)
