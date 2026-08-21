@@ -36,7 +36,7 @@ struct VolumesView: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ResourceSplitPane {
+                ResourceSplitPane(hasSelection: selectedVolume != nil) {
                     if viewMode == ResourceViewMode.cards.rawValue {
                         List(selection: $selectedVolumeName) {
                             ForEach(filteredVolumes) { volume in
@@ -196,7 +196,7 @@ struct NetworksView: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ResourceSplitPane {
+                ResourceSplitPane(hasSelection: selectedNetwork != nil) {
                     if viewMode == ResourceViewMode.cards.rawValue {
                         List(selection: $selectedNetworkID) {
                             ForEach(filteredNetworks) { network in

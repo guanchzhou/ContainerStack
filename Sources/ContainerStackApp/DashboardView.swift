@@ -38,7 +38,7 @@ struct DashboardView: View {
     var body: some View {
         NavigationSplitView {
             DashboardSidebar(selection: $selection, model: model)
-                .navigationSplitViewColumnWidth(min: 196, ideal: 210, max: 248)
+                .navigationSplitViewColumnWidth(min: 168, ideal: 182, max: 240)
                 .navigationTitle("")
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     SidebarRuntimePanel(model: model)
@@ -80,38 +80,29 @@ struct DashboardView: View {
                     }
                     if selection != .overview {
                         ToolbarItem {
-                            // Cards or table is the user's call, not ours. The Activity
-                            // Monitor is excluded: comparing numbers across rows IS a table.
-                            Picker("View", selection: $resourceViewMode) {
-                                ForEach(ResourceViewMode.allCases) { mode in
-                                    Image(systemName: mode.symbol)
-                                        .help(mode.title)
-                                        .accessibilityLabel(mode.title)
-                                        .tag(mode.rawValue)
+                            // One control, not two segmented pairs. Four filled icons in a
+                            // row carried no hierarchy and read as a wall of black squares;
+                            // a menu of named choices says what each one does.
+                            Menu {
+                                Picker("Layout", selection: $resourceViewMode) {
+                                    ForEach(ResourceViewMode.allCases) { mode in
+                                        Label(mode.title, systemImage: mode.symbol)
+                                            .tag(mode.rawValue)
+                                    }
                                 }
-                            }
-                            .pickerStyle(.segmented)
-                            .labelsHidden()
-                            .help("Switch between cards and a table")
-                        }
-                    }
-                    // Inspector placement: logs and configuration need width, so the
-                    // bottom position exists for them. Omitted rather than hidden on the
-                    // Activity Monitor — an invisible control still reserves its slot and
-                    // reads as an empty button.
-                    if selection != .overview {
-                        ToolbarItem {
-                            Picker("Inspector", selection: $inspectorPlacement) {
-                                ForEach(InspectorPlacement.allCases) { placement in
-                                    Image(systemName: placement.symbol)
-                                        .help(placement.title)
-                                        .accessibilityLabel(placement.title)
-                                        .tag(placement.rawValue)
+                                .pickerStyle(.inline)
+
+                                Picker("Inspector", selection: $inspectorPlacement) {
+                                    ForEach(InspectorPlacement.allCases) { placement in
+                                        Label(placement.title, systemImage: placement.symbol)
+                                            .tag(placement.rawValue)
+                                    }
                                 }
+                                .pickerStyle(.inline)
+                            } label: {
+                                Label("View Options", systemImage: "slider.horizontal.3")
                             }
-                            .pickerStyle(.segmented)
-                            .labelsHidden()
-                            .help("Move the inspector")
+                            .help("View options")
                         }
                     }
                     ToolbarItem {
@@ -123,7 +114,7 @@ struct DashboardView: View {
                             }
                             .disabled(model.isLoading || model.isStarting)
                         } label: {
-                            LucideLabel(title: "More", icon: .ellipsis)
+                            Label("More", systemImage: "ellipsis.circle")
                         }
                     }
                 }

@@ -32,7 +32,7 @@ struct StacksView: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ResourceSplitPane {
+                ResourceSplitPane(hasSelection: selectedStackID != nil) {
                     Group {
                     if viewMode == ResourceViewMode.cards.rawValue {
                         List(selection: $selectedStackID) {

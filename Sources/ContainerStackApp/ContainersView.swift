@@ -26,7 +26,7 @@ struct ContainersView: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ResourceSplitPane {
+                ResourceSplitPane(hasSelection: selectedContainer != nil) {
                     Group {
                     if viewMode == ResourceViewMode.cards.rawValue {
                         // Sections restore the Compose grouping the table could only express

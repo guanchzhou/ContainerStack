@@ -39,7 +39,7 @@ struct ImagesView: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ResourceSplitPane {
+                ResourceSplitPane(hasSelection: selectedImage != nil) {
                     // Group so the context menu applies to whichever presentation is active.
                     Group {
                     if viewMode == ResourceViewMode.cards.rawValue {

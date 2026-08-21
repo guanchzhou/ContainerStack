@@ -27,6 +27,9 @@ enum InspectorPlacement: String, CaseIterable, Identifiable {
 }
 
 struct ResourceSplitPane<ListContent: View, Inspector: View>: View {
+    /// Nothing selected means nothing to inspect, so the pane is not drawn at all. It used
+    /// to hold roughly 60% of the window to say "No Selection".
+    var hasSelection: Bool
     @ViewBuilder var list: () -> ListContent
     @ViewBuilder var inspector: () -> Inspector
     @AppStorage(InspectorPlacement.storageKey) private var placementRaw = InspectorPlacement.trailing.rawValue
@@ -38,18 +41,22 @@ struct ResourceSplitPane<ListContent: View, Inspector: View>: View {
     var body: some View {
         // H/VSplitView rather than a fixed frame: the divider becomes draggable, so the
         // inspector is no longer locked to one width the user cannot change.
-        switch placement {
-        case .trailing:
-            HSplitView {
-                list().frame(minWidth: 340)
-                inspector().frame(minWidth: 300, idealWidth: 404)
-            }
-        case .bottom:
-            VSplitView {
-                // The list yields space here: it scrolls, the inspector clips. Before this
-                // the inspector got ~180pt and its content ran under the window edge.
-                list().frame(minHeight: 120, idealHeight: 220)
-                inspector().frame(minHeight: 300)
+        if !hasSelection {
+            list()
+        } else {
+            switch placement {
+            case .trailing:
+                HSplitView {
+                    list().frame(minWidth: 340)
+                    inspector().frame(minWidth: 300, idealWidth: 404)
+                }
+            case .bottom:
+                VSplitView {
+                    // The list yields space here: it scrolls, the inspector clips. Before
+                    // this the inspector got ~180pt and ran under the window edge.
+                    list().frame(minHeight: 120, idealHeight: 220)
+                    inspector().frame(minHeight: 300)
+                }
             }
         }
     }
