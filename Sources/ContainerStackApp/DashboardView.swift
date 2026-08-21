@@ -32,6 +32,7 @@ struct DashboardView: View {
     @State private var isConfirmingPrune = false
     @State private var searchText = ""
     @State private var focusImagePull = false
+    @AppStorage(InspectorPlacement.storageKey) private var inspectorPlacement = InspectorPlacement.trailing.rawValue
 
     var body: some View {
         NavigationSplitView {
@@ -75,6 +76,24 @@ struct DashboardView: View {
                             focusImagePull = true
                         }
                         .disabled(!model.isHealthy)
+                    }
+                    ToolbarItem {
+                        // Inspector placement: logs and configuration need width, so the
+                        // bottom position exists for them. Hidden on the Activity Monitor,
+                        // which has no inspector.
+                        Picker("Inspector", selection: $inspectorPlacement) {
+                            ForEach(InspectorPlacement.allCases) { placement in
+                                Image(systemName: placement.symbol)
+                                    .help(placement.title)
+                                    .accessibilityLabel(placement.title)
+                                    .tag(placement.rawValue)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .help("Move the inspector")
+                        .opacity(selection == .overview ? 0 : 1)
+                        .disabled(selection == .overview)
                     }
                     ToolbarItem {
                         Menu {
@@ -180,196 +199,3 @@ private struct ContainerLogsSheet: View {
     }
 }
 
-private struct OverviewView: View {
-    let model: RuntimeViewModel
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                RuntimeHero(model: model)
-                ResourceSummary(model: model)
-
-                if let containerMessage = model.containerMessage {
-                    MessageCard(title: containerMessage, icon: .info, tint: .secondary)
-                }
-
-                if let resourceMessage = model.resourceMessage {
-                    MessageCard(title: resourceMessage, icon: .sparkles, tint: .secondary)
-                }
-
-                if let containerOutput = model.containerOutput {
-                    OutputCard(output: containerOutput)
-                }
-
-                RecentContainers(model: model)
-                RuntimeDetails(model: model)
-            }
-            .padding(28)
-        }
-    }
-}
-
-private struct RuntimeHero: View {
-    let model: RuntimeViewModel
-
-    private var tint: Color {
-        switch model.runtimeState {
-        case .running: .green
-        case .degraded: .yellow
-        case .detached: .yellow
-        case .starting: .blue
-        case .offline: .orange
-        case .unknown: .secondary
-        }
-    }
-
-    private var detail: String {
-        if let statusDetail = model.statusDetail {
-            return statusDetail
-        }
-        guard let snapshot = model.snapshot else {
-            return "Apple Container with a Docker-compatible socket."
-        }
-        let api = snapshot.version.apiVersion ?? "unknown"
-        let architecture = snapshot.info.architecture ?? "unknown"
-        return "Docker API \(api) · \(architecture) · \(model.socketPath)"
-    }
-
-    var body: some View {
-        HStack(spacing: 18) {
-            LucideIcon(model.runtimeState.lucide)
-                .frame(width: 28, height: 28)
-                .foregroundStyle(tint)
-                .frame(width: 56, height: 56)
-                .background(tint.opacity(0.12), in: .rect(cornerRadius: 14))
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(model.statusTitle)
-                    .font(.title2.weight(.semibold))
-                Text(detail)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .truncationMode(.middle)
-            }
-
-            Spacer(minLength: 12)
-        }
-        .padding(22)
-        .background(.regularMaterial, in: .rect(cornerRadius: 16))
-    }
-}
-
-private struct ResourceSummary: View {
-    let model: RuntimeViewModel
-
-    var body: some View {
-        HStack(spacing: 12) {
-            MetricCard(
-                title: "Containers",
-                value: model.containers.count,
-                icon: .container,
-                tint: .blue
-            )
-            MetricCard(
-                title: "Running",
-                value: model.containers.filter(\.isRunning).count,
-                icon: .circlePlay,
-                tint: .green
-            )
-            MetricCard(
-                title: "Images",
-                value: model.images.count,
-                icon: .package,
-                tint: .purple
-            )
-            MetricCard(
-                title: "Volumes",
-                value: model.volumes.count,
-                icon: .hardDrive,
-                tint: .teal
-            )
-            MetricCard(
-                title: "Image storage",
-                value: model.storageSummary,
-                icon: .database,
-                tint: .orange
-            )
-        }
-    }
-}
-
-private struct RecentContainers: View {
-    let model: RuntimeViewModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Recent containers")
-                    .font(.headline)
-                Spacer()
-                Text("\(model.containers.count) total")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            if model.containers.isEmpty {
-                EmptyResourceView(
-                    title: "No containers yet",
-                    description: "Run an image from the Images section to create a container.",
-                    icon: .container
-                )
-            } else {
-                ForEach(model.containers.prefix(5)) { container in
-                    ContainerRow(
-                        container: container,
-                        model: model,
-                        onShowLogs: {
-                            Task { await model.showLogs(for: container) }
-                        }
-                    )
-                }
-            }
-        }
-    }
-}
-
-private struct RuntimeDetails: View {
-    let model: RuntimeViewModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Engine")
-                .font(.headline)
-
-            if let snapshot = model.snapshot {
-                Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 8) {
-                    GridRow {
-                        Text("Docker API").foregroundStyle(.secondary)
-                        Text(snapshot.version.apiVersion ?? "Unknown")
-                    }
-                    GridRow {
-                        Text("Engine").foregroundStyle(.secondary)
-                        Text(snapshot.version.version ?? "Unknown")
-                    }
-                    GridRow {
-                        Text("Architecture").foregroundStyle(.secondary)
-                        Text(snapshot.info.architecture ?? "Unknown")
-                    }
-                    GridRow {
-                        Text("Docker socket").foregroundStyle(.secondary)
-                        Text(model.socketPath)
-                            .textSelection(.enabled)
-                    }
-                }
-                .font(.callout.monospaced())
-            } else {
-                Text("Start the runtime from the sidebar to inspect engine details.")
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.quaternary.opacity(0.35), in: .rect(cornerRadius: 14))
-    }
-}

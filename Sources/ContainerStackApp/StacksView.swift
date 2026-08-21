@@ -11,6 +11,7 @@ struct StacksView: View {
     @State private var newStackName = ""
     @State private var newStackDirectory: URL?
     @State private var selectedStackID: UUID?
+    @State private var stackSort = [KeyPathComparator(\ComposeStack.name)]
     @State private var openedStackID: UUID?
     @Environment(\.appTheme) private var theme
 
@@ -31,21 +32,25 @@ struct StacksView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ResourceSplitPane {
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            ForEach(filteredStacks) { stack in
-                                StackRow(
-                                    stack: stack,
-                                    model: model,
-                                    isSelected: selectedStackID == stack.id
-                                ) {
-                                    selectedStackID = stack.id
-                                }
-                                .contextMenu {
-                                    Button("Unregister (keeps the file)") {
-                                        model.removeStack(stack)
-                                    }
-                                }
+                    Table(filteredStacks, selection: $selectedStackID, sortOrder: $stackSort) {
+                        TableColumn("Stack", value: \.name) { stack in
+                            Text(stack.name).fontWeight(.medium)
+                        }
+                        .width(min: 120, ideal: 180)
+                        TableColumn("Compose file", value: \.filePathText) { stack in
+                            Text(stack.filePathText)
+                                .foregroundStyle(.secondary)
+                                .truncationMode(.middle)
+                                .textSelection(.enabled)
+                        }
+                        .width(min: 200, ideal: 380)
+                    }
+                    .tableStyle(.inset(alternatesRowBackgrounds: false))
+                    .contextMenu(forSelectionType: UUID.self) { selected in
+                        if let id = selected.first,
+                           let stack = model.allStacks.first(where: { $0.id == id }) {
+                            Button("Unregister (keeps the file)") {
+                                model.removeStack(stack)
                             }
                         }
                     }
@@ -118,78 +123,6 @@ struct StacksView: View {
         panel.prompt = "Add"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         Task { await model.addStack(fileURL: url) }
-    }
-}
-
-private struct StackRow: View {
-    let stack: ComposeStack
-    let model: RuntimeViewModel
-    let isSelected: Bool
-    let onSelect: () -> Void
-    @Environment(\.appTheme) private var theme
-
-    private var statuses: [ComposeServiceStatus] {
-        model.stackStatuses[stack.id] ?? []
-    }
-
-    private var runningCount: Int {
-        statuses.filter(\.isRunning).count
-    }
-
-    private var isBusy: Bool {
-        model.busyStackID == stack.id
-    }
-
-    var body: some View {
-        SelectableResourceRow(
-            isSelected: isSelected,
-            accessibilityLabel: stack.name,
-            action: onSelect
-        ) {
-            HStack(spacing: 9) {
-                LucideIcon(.layers)
-                    .frame(width: 13, height: 13)
-                    .foregroundStyle(isSelected ? Color.white : Color(uiHex: 0x3B82F6))
-                    .frame(width: 27, height: 27)
-                    .background(
-                        Color(uiHex: 0x3B82F6).opacity(isSelected ? 0.28 : 0.22),
-                        in: RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    )
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(stack.name)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(isSelected ? Color.white : theme.textPrimary)
-                        .lineLimit(1)
-                    Text(stack.fileURL.path)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(isSelected ? Color.white.opacity(0.78) : theme.textSecondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-                Spacer(minLength: 8)
-                Text(statuses.isEmpty ? "—" : "\(runningCount)/\(statuses.count)")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(isSelected ? Color.white.opacity(0.78) : theme.textSecondary)
-            }
-        } actions: {
-            HStack(spacing: 2) {
-                RowActionButton(
-                    icon: .play,
-                    help: "Start stack",
-                    isSelected: isSelected
-                ) {
-                    Task { await model.upStack(stack) }
-                }
-                RowActionButton(
-                    icon: .square,
-                    help: "Stop stack",
-                    isSelected: isSelected
-                ) {
-                    Task { await model.downStack(stack, removeVolumes: false) }
-                }
-            }
-            .disabled(isBusy || !model.isHealthy)
-        }
     }
 }
 

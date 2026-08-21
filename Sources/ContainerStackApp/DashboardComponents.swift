@@ -1,46 +1,5 @@
 import SwiftUI
 
-struct MetricCard: View {
-    let title: String
-    let value: String
-    let icon: Lucide
-    let tint: Color
-
-    init(title: String, value: Int, icon: Lucide, tint: Color) {
-        self.init(title: title, value: "\(value)", icon: icon, tint: tint)
-    }
-
-    init(title: String, value: String, icon: Lucide, tint: Color) {
-        self.title = title
-        self.value = value
-        self.icon = icon
-        self.tint = tint
-    }
-
-    var body: some View {
-        HStack(spacing: 12) {
-            LucideIcon(icon)
-                .foregroundStyle(tint)
-                .frame(width: 18, height: 18)
-                .frame(width: 32, height: 32)
-                .background(tint.opacity(0.12), in: .rect(cornerRadius: 9))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(value)
-                    .font(.title3.weight(.semibold).monospacedDigit())
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                Text(title)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.quaternary.opacity(0.45), in: .rect(cornerRadius: 12))
-    }
-}
-
 struct EmptyResourceView: View {
     let title: String
     let description: String

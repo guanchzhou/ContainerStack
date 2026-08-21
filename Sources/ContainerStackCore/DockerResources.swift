@@ -201,3 +201,45 @@ public enum DockerJSONStream {
         return objects
     }
 }
+
+// Table columns sort on a key path, which needs a non-optional Comparable. These keep the
+// "—" placeholder in one place instead of at every call site.
+extension DockerVolumeSummary {
+    public var driverText: String { driver ?? "local" }
+    public var mountText: String { mountpoint ?? "—" }
+}
+
+extension DockerNetworkSummary {
+    public var driverText: String { driver ?? "nat" }
+    public var subnetText: String { subnet ?? "—" }
+    public var gatewayText: String { gateway ?? "—" }
+}
+
+// `id` already exists; Table needs the conformance declared.
+extension DockerImageSummary: Identifiable {}
+
+extension DockerImageSummary {
+    /// First repo tag, or a short id for a dangling image. Non-optional so Table can sort on it.
+    public var referenceText: String {
+        repositoryTags?.first ?? String(id.replacingOccurrences(of: "sha256:", with: "").prefix(12))
+    }
+
+    public var sizeSortKey: Int64 { size ?? -1 }
+    public var createdSortKey: Int64 { (created ?? 0) > 0 ? (created ?? 0) : -1 }
+
+    /// `Created` is absent for some images — Apple's vminit reports it in neither
+    /// /images/json nor image inspect, and /images/json sends 0 rather than omitting the
+    /// key. Rendering the epoch claimed "56 years ago", so non-positive means unknown.
+    public var createdText: String {
+        guard let created, created > 0 else { return "—" }
+        return Date(timeIntervalSince1970: TimeInterval(created))
+            .formatted(.relative(presentation: .named))
+    }
+}
+
+extension DockerContainerSummary {
+    public var imageText: String { image ?? "—" }
+    public var stateText: String { status ?? state ?? "—" }
+    public var stackText: String { composeProject ?? "—" }
+    public var portsText: String { portSummary ?? "—" }
+}

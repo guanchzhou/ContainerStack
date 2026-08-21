@@ -121,3 +121,12 @@ public struct StackRegistry: Sendable {
         }
     }
 }
+
+extension ComposeStack {
+    /// Abbreviated path for the Stacks table; non-optional so the column can sort on it.
+    public var filePathText: String {
+        let path = fileURL.path
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
+    }
+}

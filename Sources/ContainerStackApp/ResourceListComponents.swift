@@ -1,57 +1,55 @@
 import ContainerStackCore
 import SwiftUI
 
+/// Where the detail pane sits. Logs and configuration are wide, not tall, so a 404pt
+/// column wraps every line; at the bottom they get the window's full width.
+enum InspectorPlacement: String, CaseIterable, Identifiable {
+    case trailing
+    case bottom
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .trailing: "Inspector on Right"
+        case .bottom: "Inspector at Bottom"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .trailing: "square.righthalf.filled"
+        case .bottom: "square.bottomhalf.filled"
+        }
+    }
+
+    static let storageKey = "inspectorPlacement"
+}
+
 struct ResourceSplitPane<ListContent: View, Inspector: View>: View {
     @ViewBuilder var list: () -> ListContent
     @ViewBuilder var inspector: () -> Inspector
-    @Environment(\.appTheme) private var theme
+    @AppStorage(InspectorPlacement.storageKey) private var placementRaw = InspectorPlacement.trailing.rawValue
 
-    var body: some View {
-        HStack(spacing: 0) {
-            list()
-            Rectangle()
-                .fill(theme.hairline)
-                .frame(width: 0.5)
-            inspector()
-                .frame(width: 404)
-        }
+    private var placement: InspectorPlacement {
+        InspectorPlacement(rawValue: placementRaw) ?? .trailing
     }
-}
-
-struct SelectableResourceRow<Content: View, Actions: View>: View {
-    let isSelected: Bool
-    let accessibilityLabel: String
-    let action: () -> Void
-    @ViewBuilder var content: () -> Content
-    @ViewBuilder var actions: () -> Actions
-    @Environment(\.appTheme) private var theme
-    @State private var isHovered = false
 
     var body: some View {
-        HStack(spacing: 9) {
-            Button(action: action) {
-                content()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
+        // H/VSplitView rather than a fixed frame: the divider becomes draggable, so the
+        // inspector is no longer locked to one width the user cannot change.
+        switch placement {
+        case .trailing:
+            HSplitView {
+                list().frame(minWidth: 340)
+                inspector().frame(minWidth: 300, idealWidth: 404)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(accessibilityLabel)
-            .accessibilityAddTraits(isSelected ? .isSelected : [])
-            actions()
+        case .bottom:
+            VSplitView {
+                list().frame(minHeight: 140)
+                inspector().frame(minHeight: 200, idealHeight: 340)
+            }
         }
-        .padding(.horizontal, 12)
-        .frame(height: 44)
-        .background(rowBackground)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(theme.hairline).frame(height: 0.5)
-        }
-        .onHover { isHovered = $0 }
-    }
-
-    private var rowBackground: Color {
-        if isSelected { return theme.accent }
-        if isHovered { return theme.rowHover }
-        return .clear
     }
 }
 
@@ -171,56 +169,6 @@ struct InspectorAction: View {
                 )
         }
         .buttonStyle(.plain)
-    }
-}
-
-struct RowActionButton: View {
-    let icon: Lucide
-    let help: String
-    var destructive: Bool = false
-    var isSelected: Bool = false
-    let action: () -> Void
-    @Environment(\.appTheme) private var theme
-
-    var body: some View {
-        Button(action: action) {
-            LucideIcon(icon)
-                .frame(width: 11, height: 11)
-                .foregroundStyle(color)
-                .frame(width: 24, height: 24)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help(help)
-    }
-
-    private var color: Color {
-        if isSelected { return destructive ? theme.destructive : Color.white.opacity(0.9) }
-        return destructive ? theme.destructive.opacity(0.8) : theme.textSecondary
-    }
-}
-
-struct ResourceAvatar: View {
-    let text: String
-    let tint: Color
-    var isOn: Bool = true
-    @Environment(\.appTheme) private var theme
-
-    var body: some View {
-        Text(text)
-            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-            .foregroundStyle(isOn ? tint : theme.textSecondary)
-            .frame(width: 27, height: 27)
-            .background(
-                (isOn ? tint : Color.gray).opacity(0.22),
-                in: RoundedRectangle(cornerRadius: 7, style: .continuous)
-            )
-    }
-
-    static func initials(from source: String) -> String {
-        let letters = source.filter(\.isLetter)
-        let seed = letters.count >= 2 ? String(letters.prefix(2)) : String(source.prefix(2))
-        return seed.lowercased()
     }
 }
 

@@ -6,6 +6,8 @@ struct VolumesView: View {
     var searchText: String = ""
     @State private var isConfirmingPrune = false
     @State private var selectedVolumeName: String?
+    @State private var volumeSort = [KeyPathComparator(\DockerVolumeSummary.name)]
+    @State private var pendingVolumeDelete: DockerVolumeSummary?
     @Environment(\.appTheme) private var theme
 
     var body: some View {
@@ -34,21 +36,54 @@ struct VolumesView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ResourceSplitPane {
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            ForEach(filteredVolumes) { volume in
-                                VolumeRow(
-                                    volume: volume,
-                                    model: model,
-                                    isSelected: selectedVolumeName == volume.name
-                                ) {
-                                    selectedVolumeName = volume.name
-                                }
+                    Table(filteredVolumes, selection: $selectedVolumeName, sortOrder: $volumeSort) {
+                        TableColumn("Name", value: \.name) { volume in
+                            Text(volume.name).fontWeight(.medium)
+                        }
+                        .width(min: 140, ideal: 220)
+                        TableColumn("Driver", value: \.driverText) { volume in
+                            Text(volume.driverText).foregroundStyle(.secondary)
+                        }
+                        .width(min: 60, ideal: 90)
+                        TableColumn("Mount point", value: \.mountText) { volume in
+                            Text(volume.mountText)
+                                .foregroundStyle(.secondary)
+                                .truncationMode(.middle)
+                                .textSelection(.enabled)
+                        }
+                        .width(min: 160, ideal: 320)
+                    }
+                    .tableStyle(.inset(alternatesRowBackgrounds: false))
+                    // Right-click actions: a native affordance the hand-rolled rows never had.
+                    .contextMenu(forSelectionType: String.self) { selected in
+                        if let name = selected.first,
+                           let volume = model.volumes.first(where: { $0.name == name }) {
+                            Button("Delete Volume…", role: .destructive) {
+                                selectedVolumeName = name
+                                pendingVolumeDelete = volume
                             }
                         }
                     }
                 } inspector: {
                     VolumeInspector(volume: selectedVolume, model: model)
+                }
+                .confirmationDialog(
+                    "Delete volume \(pendingVolumeDelete?.name ?? "")?",
+                    isPresented: Binding(
+                        get: { pendingVolumeDelete != nil },
+                        set: { if !$0 { pendingVolumeDelete = nil } }
+                    ),
+                    titleVisibility: .visible
+                ) {
+                    Button("Delete Volume", role: .destructive) {
+                        if let volume = pendingVolumeDelete {
+                            Task { await model.remove(volume: volume) }
+                        }
+                        pendingVolumeDelete = nil
+                    }
+                    Button("Cancel", role: .cancel) { pendingVolumeDelete = nil }
+                } message: {
+                    Text("Volume data is deleted permanently and cannot be restored.")
                 }
             }
 
@@ -95,6 +130,8 @@ struct NetworksView: View {
     let model: RuntimeViewModel
     var searchText: String = ""
     @State private var selectedNetworkID: String?
+    @State private var networkSort = [KeyPathComparator(\DockerNetworkSummary.name)]
+    @State private var pendingNetworkDelete: DockerNetworkSummary?
     @Environment(\.appTheme) private var theme
 
     var body: some View {
@@ -123,21 +160,54 @@ struct NetworksView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ResourceSplitPane {
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            ForEach(filteredNetworks) { network in
-                                NetworkRow(
-                                    network: network,
-                                    model: model,
-                                    isSelected: selectedNetworkID == network.id
-                                ) {
-                                    selectedNetworkID = network.id
-                                }
+                    Table(filteredNetworks, selection: $selectedNetworkID, sortOrder: $networkSort) {
+                        TableColumn("Name", value: \.name) { network in
+                            Text(network.name).fontWeight(.medium)
+                        }
+                        .width(min: 130, ideal: 200)
+                        TableColumn("Driver", value: \.driverText) { network in
+                            Text(network.driverText).foregroundStyle(.secondary)
+                        }
+                        .width(min: 60, ideal: 80)
+                        TableColumn("Subnet", value: \.subnetText) { network in
+                            Text(network.subnetText).foregroundStyle(.secondary).monospaced()
+                        }
+                        .width(min: 110, ideal: 160)
+                        TableColumn("Gateway", value: \.gatewayText) { network in
+                            Text(network.gatewayText).foregroundStyle(.secondary).monospaced()
+                        }
+                        .width(min: 110, ideal: 160)
+                    }
+                    .tableStyle(.inset(alternatesRowBackgrounds: false))
+                    .contextMenu(forSelectionType: String.self) { selected in
+                        if let id = selected.first,
+                           let network = model.networks.first(where: { $0.id == id }) {
+                            Button("Delete Network…", role: .destructive) {
+                                selectedNetworkID = id
+                                pendingNetworkDelete = network
                             }
                         }
                     }
                 } inspector: {
                     NetworkInspector(network: selectedNetwork, model: model)
+                }
+                .confirmationDialog(
+                    "Delete network \(pendingNetworkDelete?.name ?? "")?",
+                    isPresented: Binding(
+                        get: { pendingNetworkDelete != nil },
+                        set: { if !$0 { pendingNetworkDelete = nil } }
+                    ),
+                    titleVisibility: .visible
+                ) {
+                    Button("Delete Network", role: .destructive) {
+                        if let network = pendingNetworkDelete {
+                            Task { await model.remove(network: network) }
+                        }
+                        pendingNetworkDelete = nil
+                    }
+                    Button("Cancel", role: .cancel) { pendingNetworkDelete = nil }
+                } message: {
+                    Text("Containers attached to this network lose it until they are recreated.")
                 }
             }
 
@@ -155,97 +225,6 @@ struct NetworksView: View {
     private var selectedNetwork: DockerNetworkSummary? {
         guard let selectedNetworkID else { return nil }
         return model.networks.first { $0.id == selectedNetworkID }
-    }
-}
-
-private struct VolumeRow: View {
-    let volume: DockerVolumeSummary
-    let model: RuntimeViewModel
-    let isSelected: Bool
-    let onSelect: () -> Void
-    @Environment(\.appTheme) private var theme
-
-    var body: some View {
-        SelectableResourceRow(
-            isSelected: isSelected,
-            accessibilityLabel: volume.name,
-            action: onSelect
-        ) {
-            HStack(spacing: 9) {
-                ResourceAvatar(
-                    text: ResourceAvatar.initials(from: volume.name),
-                    tint: Color(uiHex: 0x14B8A6)
-                )
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(volume.name)
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .foregroundStyle(isSelected ? Color.white : theme.textPrimary)
-                        .lineLimit(1)
-                    Text(volume.mountpoint ?? "No mountpoint")
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(isSelected ? Color.white.opacity(0.78) : theme.textSecondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-            }
-        } actions: {
-            RowActionButton(
-                icon: .trash,
-                help: "Delete",
-                destructive: true,
-                isSelected: isSelected
-            ) {
-                Task { await model.remove(volume: volume) }
-            }
-            .disabled(model.busyResource != nil || !model.isHealthy)
-        }
-    }
-}
-
-private struct NetworkRow: View {
-    let network: DockerNetworkSummary
-    let model: RuntimeViewModel
-    let isSelected: Bool
-    let onSelect: () -> Void
-    @Environment(\.appTheme) private var theme
-
-    var body: some View {
-        SelectableResourceRow(
-            isSelected: isSelected,
-            accessibilityLabel: network.name,
-            action: onSelect
-        ) {
-            HStack(spacing: 9) {
-                ResourceAvatar(
-                    text: ResourceAvatar.initials(from: network.name),
-                    tint: Color(uiHex: 0x3B82F6)
-                )
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(network.name)
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .foregroundStyle(isSelected ? Color.white : theme.textPrimary)
-                        .lineLimit(1)
-                    Text(network.subnet ?? "No subnet")
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(isSelected ? Color.white.opacity(0.78) : theme.textSecondary)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 8)
-                Text(network.driver ?? "nat")
-                    .font(.system(size: 11))
-                    .foregroundStyle(isSelected ? Color.white.opacity(0.78) : theme.textSecondary)
-            }
-        } actions: {
-            RowActionButton(
-                icon: .trash,
-                help: "Delete",
-                destructive: true,
-                isSelected: isSelected
-            ) {
-                Task { await model.remove(network: network) }
-            }
-            .disabled(model.busyResource != nil || !model.isHealthy)
-        }
     }
 }
 

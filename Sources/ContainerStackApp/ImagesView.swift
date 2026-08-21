@@ -8,6 +8,8 @@ struct ImagesView: View {
     var onFocusConsumed: () -> Void = {}
     @FocusState private var pullFocused: Bool
     @State private var selectedImageID: String?
+    @State private var imageSort = [KeyPathComparator(\DockerImageSummary.referenceText)]
+    @State private var pendingImageDelete: DockerImageSummary?
     @Environment(\.appTheme) private var theme
 
     var body: some View {
@@ -37,21 +39,63 @@ struct ImagesView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ResourceSplitPane {
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            ForEach(filteredImages, id: \.id) { image in
-                                ImageRow(
-                                    image: image,
-                                    model: model,
-                                    isSelected: selectedImageID == image.id
-                                ) {
-                                    selectedImageID = image.id
-                                }
+                    Table(filteredImages, selection: $selectedImageID, sortOrder: $imageSort) {
+                        TableColumn("Repository", value: \.referenceText) { image in
+                            Text(image.referenceText)
+                                .fontWeight(.medium)
+                                .truncationMode(.middle)
+                        }
+                        .width(min: 200, ideal: 340)
+                        TableColumn("Size", value: \.sizeSortKey) { image in
+                            Text(image.size == nil ? "—" : ByteSize.formatted(image.size))
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                        }
+                        .width(min: 70, ideal: 90)
+                        TableColumn("Created", value: \.createdSortKey) { image in
+                            Text(image.createdText)
+                                .foregroundStyle(.secondary)
+                        }
+                        .width(min: 90, ideal: 130)
+                        TableColumn("Used by", value: \.id) { image in
+                            ImageUsageCell(image: image, model: model)
+                        }
+                        .width(min: 90, ideal: 150)
+                    }
+                    .tableStyle(.inset(alternatesRowBackgrounds: false))
+                    .contextMenu(forSelectionType: String.self) { selected in
+                        if let id = selected.first,
+                           let image = model.images.first(where: { $0.id == id }) {
+                            Button("Run Image") {
+                                Task { await model.run(image: image.repositoryTags?.first ?? image.id) }
+                            }
+                            Divider()
+                            Button("Delete Image…", role: .destructive) {
+                                selectedImageID = id
+                                pendingImageDelete = image
                             }
                         }
                     }
                 } inspector: {
                     ImageInspector(image: selectedImage, model: model)
+                }
+                .confirmationDialog(
+                    "Delete image \(pendingImageDelete?.referenceText ?? "")?",
+                    isPresented: Binding(
+                        get: { pendingImageDelete != nil },
+                        set: { if !$0 { pendingImageDelete = nil } }
+                    ),
+                    titleVisibility: .visible
+                ) {
+                    Button("Delete Image", role: .destructive) {
+                        if let image = pendingImageDelete {
+                            Task { await model.remove(image: image) }
+                        }
+                        pendingImageDelete = nil
+                    }
+                    Button("Cancel", role: .cancel) { pendingImageDelete = nil }
+                } message: {
+                    Text("The image is deleted locally and must be pulled again to be used.")
                 }
             }
 
@@ -102,68 +146,6 @@ struct ImagesView: View {
     }
 }
 
-struct ImageRow: View {
-    let image: DockerImageSummary
-    let model: RuntimeViewModel
-    var isSelected: Bool = false
-    var onSelect: () -> Void = {}
-    @Environment(\.appTheme) private var theme
-
-    private var imageName: String {
-        image.repositoryTags?.first ?? ResourceIdentifier.short(image.id)
-    }
-
-    var body: some View {
-        SelectableResourceRow(
-            isSelected: isSelected,
-            accessibilityLabel: imageName,
-            action: onSelect
-        ) {
-            HStack(spacing: 9) {
-                ResourceAvatar(
-                    text: ResourceAvatar.initials(from: imageName),
-                    tint: Color(uiHex: 0x8B5CF6),
-                    isOn: true
-                )
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(imageName)
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .foregroundStyle(isSelected ? Color.white : theme.textPrimary)
-                        .lineLimit(1)
-                    Text(subtitle)
-                        .font(.system(size: 11))
-                        .foregroundStyle(isSelected ? Color.white.opacity(0.78) : theme.textSecondary)
-                        .lineLimit(1)
-                }
-            }
-        } actions: {
-            HStack(spacing: 2) {
-                RowActionButton(
-                    icon: .play,
-                    help: "Run",
-                    isSelected: isSelected
-                ) {
-                    Task { await model.run(image: imageName) }
-                }
-                RowActionButton(
-                    icon: .trash,
-                    help: "Delete",
-                    destructive: true,
-                    isSelected: isSelected
-                ) {
-                    Task { await model.remove(image: image) }
-                }
-            }
-            .disabled(model.busyResource != nil || model.isRunningContainer || !model.isHealthy)
-        }
-    }
-
-    private var subtitle: String {
-        let platform = "\(image.operatingSystem ?? "unknown")/\(image.architecture ?? "unknown")"
-        return "\(platform) · \(ByteSize.formatted(image.size))"
-    }
-}
-
 private struct ImageInspector: View {
     let image: DockerImageSummary?
     let model: RuntimeViewModel
@@ -207,5 +189,20 @@ private struct ImageInspector: View {
         guard let created else { return "—" }
         let date = Date(timeIntervalSince1970: TimeInterval(created))
         return date.formatted(.relative(presentation: .named))
+    }
+}
+
+
+/// Extracted because inlining the lookup in a TableColumn builder pushed the type checker
+/// past its limit.
+private struct ImageUsageCell: View {
+    let image: DockerImageSummary
+    let model: RuntimeViewModel
+
+    var body: some View {
+        let used = ResourceUsage.containers(usingImage: image, from: model.containers)
+        Text(used.isEmpty ? "—" : used.map(\.name).joined(separator: ", "))
+            .foregroundStyle(.secondary)
+            .truncationMode(.middle)
     }
 }
