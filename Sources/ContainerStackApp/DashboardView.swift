@@ -77,23 +77,24 @@ struct DashboardView: View {
                         }
                         .disabled(!model.isHealthy)
                     }
-                    ToolbarItem {
-                        // Inspector placement: logs and configuration need width, so the
-                        // bottom position exists for them. Hidden on the Activity Monitor,
-                        // which has no inspector.
-                        Picker("Inspector", selection: $inspectorPlacement) {
-                            ForEach(InspectorPlacement.allCases) { placement in
-                                Image(systemName: placement.symbol)
-                                    .help(placement.title)
-                                    .accessibilityLabel(placement.title)
-                                    .tag(placement.rawValue)
+                    // Inspector placement: logs and configuration need width, so the
+                    // bottom position exists for them. Omitted rather than hidden on the
+                    // Activity Monitor — an invisible control still reserves its slot and
+                    // reads as an empty button.
+                    if selection != .overview {
+                        ToolbarItem {
+                            Picker("Inspector", selection: $inspectorPlacement) {
+                                ForEach(InspectorPlacement.allCases) { placement in
+                                    Image(systemName: placement.symbol)
+                                        .help(placement.title)
+                                        .accessibilityLabel(placement.title)
+                                        .tag(placement.rawValue)
+                                }
                             }
+                            .pickerStyle(.segmented)
+                            .labelsHidden()
+                            .help("Move the inspector")
                         }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
-                        .help("Move the inspector")
-                        .opacity(selection == .overview ? 0 : 1)
-                        .disabled(selection == .overview)
                     }
                     ToolbarItem {
                         Menu {
