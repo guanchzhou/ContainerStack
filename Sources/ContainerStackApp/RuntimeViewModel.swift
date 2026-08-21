@@ -52,6 +52,9 @@ final class RuntimeViewModel {
     internal(set) var resourceRows: [ContainerResourceRow] = []
     var allocations: [String: ContainerAllocation?] = [:]
     var statsTask: Task<Void, Never>?
+    /// Image platform, keyed by image id. The outer optional is "not fetched", the inner is
+    /// "fetched and the runtime had nothing".
+    var imageDetails: [String: DockerImageDetail?] = [:]
     /// Set when /system/df fails, so the UI can say "engine error" instead of showing a dash.
     internal(set) var diskUsageErrorMessage: String?
     internal(set) var serviceMessage: String? {

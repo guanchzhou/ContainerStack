@@ -99,6 +99,11 @@ struct ImagesView: View {
                     }
                 } inspector: {
                     ImageInspector(image: selectedImage, model: model)
+                        .task(id: selectedImageID) {
+                            if let image = selectedImage {
+                                await model.loadImageDetail(for: image)
+                            }
+                        }
                 }
                 .confirmationDialog(
                     "Delete image \(pendingImageDelete?.referenceText ?? "")?",
@@ -171,6 +176,10 @@ private struct ImageInspector: View {
     let image: DockerImageSummary?
     let model: RuntimeViewModel
 
+    private var detail: DockerImageDetail? {
+        image.flatMap { model.imageDetail(for: $0) }
+    }
+
     var body: some View {
         if let image {
             let name = image.repositoryTags?.first ?? ResourceIdentifier.short(image.id)
@@ -192,7 +201,7 @@ private struct ImageInspector: View {
                         ("Arch", image.architecture ?? "—", true),
                         ("OS", image.operatingSystem ?? "—", false),
                         ("Size", ByteSize.formatted(image.size), false),
-                        ("Created", formattedCreated(image.created), false),
+                        ("Created", image.createdText, false),
                         (
                             "Used by",
                             used.isEmpty ? "—" : used.map(\.name).joined(separator: ", "),
@@ -206,11 +215,6 @@ private struct ImageInspector: View {
         }
     }
 
-    private func formattedCreated(_ created: Int64?) -> String {
-        guard let created else { return "—" }
-        let date = Date(timeIntervalSince1970: TimeInterval(created))
-        return date.formatted(.relative(presentation: .named))
-    }
 }
 
 

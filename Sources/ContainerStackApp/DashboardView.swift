@@ -149,19 +149,25 @@ struct DashboardView: View {
         .frame(minWidth: 1040, minHeight: 680)
     }
 
+    /// `^[..](inflect:)` only resolves inside a LocalizedStringKey; interpolated into a
+    /// plain String it renders as literal markup, which is what shipped.
+    static func counted(_ count: Int, _ noun: String) -> String {
+        "\(count) \(noun)\(count == 1 ? "" : "s")"
+    }
+
     private var headerSubtitle: String {
         switch selection {
         case .containers:
             let running = model.containers.filter(\.isRunning).count
             return "\(running) of \(model.containers.count) running"
         case .stacks:
-            return "^[\(model.allStacks.count) stack](inflect: true)"
+            return Self.counted(model.allStacks.count, "stack")
         case .images:
-            return "^[\(model.images.count) image](inflect: true)"
+            return Self.counted(model.images.count, "image")
         case .volumes:
-            return "^[\(model.volumes.count) volume](inflect: true)"
+            return Self.counted(model.volumes.count, "volume")
         case .networks:
-            return "^[\(model.networks.count) network](inflect: true)"
+            return Self.counted(model.networks.count, "network")
         case .overview:
             return model.statusTitle
         }

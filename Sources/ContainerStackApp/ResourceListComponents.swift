@@ -47,8 +47,12 @@ struct ResourceSplitPane<ListContent: View, Inspector: View>: View {
             switch placement {
             case .trailing:
                 HSplitView {
-                    list().frame(minWidth: 340)
-                    inspector().frame(minWidth: 300, idealWidth: 404)
+                    list().frame(minWidth: 340, maxWidth: .infinity)
+                    // maxWidth matters: without it the inspector's own content decides how
+                    // much it takes — the segmented Stats/Logs/Ports picker asks for width
+                    // proportional to its labels — so the list column jumped every time the
+                    // selection changed.
+                    inspector().frame(minWidth: 300, idealWidth: 404, maxWidth: 460)
                 }
             case .bottom:
                 VSplitView {
